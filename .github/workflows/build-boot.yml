@@ -70,7 +70,6 @@ jobs:
   build:
     name: ${{ matrix.variant }} 变体
     needs: prepare
-    if: inputs.variant == 'both' || inputs.variant == '' || inputs.variant == matrix.variant
     runs-on: ubuntu-22.04
     timeout-minutes: 240
     concurrency:
@@ -79,11 +78,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - variant: enforcing
-            desc: SELinux 严格（KSU 策略注入成功则保持 Enforcing）
-          - variant: permissive
-            desc: SELinux 宽容（KSU_FORCE_PERMISSIVE，强制 setenforce 0）
+        variant: ${{ fromJSON(inputs.variant == 'enforcing' && '["enforcing"]' || inputs.variant == 'permissive' && '["permissive"]' || '["enforcing","permissive"]') }}
 
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
@@ -168,7 +163,7 @@ jobs:
           {
             echo "## ${{ matrix.variant }} 变体"
             echo
-            echo "- 说明：${{ matrix.desc }}"
+            echo "- 说明：${{ matrix.variant == 'permissive' && 'SELinux 宽容（KSU_FORCE_PERMISSIVE，强制 setenforce 0）' || 'SELinux 严格（KSU 策略注入成功则保持 Enforcing）' }}"
             echo "- 版本：\`$VERSION\`"
             echo "- 提交：\`${GITHUB_SHA::7}\`"
             echo
