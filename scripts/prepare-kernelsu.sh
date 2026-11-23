@@ -48,6 +48,47 @@ else
     die "补丁无法应用，请检查 KernelSU 是否停在 $BASE（当前 $(git -C "$KSU_DIR" rev-parse --short HEAD)）"
 fi
 
+# 2.5) SELinux 宽容（permissive）变体：强制 second_stage 之后 setenforce(0)
+if [ "${KSU_FORCE_PERMISSIVE:-0}" = "1" ]; then
+    log "注入 KSU_FORCE_PERMISSIVE 分支（permissive 变体）"
+    python3 - "$KSU_DIR/kernel/runtime/ksud_integration.c" <<'PYEOF'
+import sys
+
+path = sys.argv[1]
+src = open(path, encoding="utf-8").read()
+
+old = """            if (!apply_kernelsu_rules()) {
+                pr_info("KernelSU: policy injection failed, falling back to permissive\\n");
+                setenforce(false);
+            }
+"""
+
+new = """#ifdef KSU_FORCE_PERMISSIVE
+            if (apply_kernelsu_rules())
+                pr_info("KernelSU: policy injected, but KSU_FORCE_PERMISSIVE keeps permissive\\n");
+            else
+                pr_info("KernelSU: policy injection failed, KSU_FORCE_PERMISSIVE keeps permissive\\n");
+            setenforce(false);
+#else
+            if (!apply_kernelsu_rules()) {
+                pr_info("KernelSU: policy injection failed, falling back to permissive\\n");
+                setenforce(false);
+            }
+#endif
+"""
+
+if new in src:
+    print(">>> 已注入过，跳过")
+elif old in src:
+    open(path, "w", encoding="utf-8").write(src.replace(old, new, 1))
+    print(">>> 已注入 KSU_FORCE_PERMISSIVE 分支")
+else:
+    print("[x] 找不到注入代码块，permissive 变体无法生成", file=sys.stderr)
+    sys.exit(1)
+PYEOF
+    [ $? -eq 0 ] || die "KSU_FORCE_PERMISSIVE 注入失败"
+fi
+
 # 3) drivers/kernelsu -> ../KernelSU/kernel 软链接
 ln -sfn ../KernelSU/kernel "$KERNEL_DIR/drivers/kernelsu"
 log "已创建软链接 drivers/kernelsu -> ../KernelSU/kernel"

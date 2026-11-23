@@ -21,7 +21,7 @@
 |---|---|---|
 | 本地文件 | 把文件放到 `boot/stock_boot.img` | 本地 `docker compose run --rm build` |
 | Release asset | 上传到本仓库 Release，文件名 `stock_boot.img` | GitHub Actions（不污染 git 历史，大小不限） |
-| Secrets | `STOCK_BOOT_URL`（可配 `STOCK_BOOT_AUTH_HEADER`）或 `STOCK_BOOT_IMG_B64` | 私有下载源 / 内网 |
+| Secrets | `STOCK_BOOT_URL`（可配 `STOCK_BOOT_AUTH_HEADER`）或 `KSU_STOCK_BOOT_B64` | 私有下载源 / 内网 |
 
 `*.img` 已被 `.gitignore` 忽略，`boot/stock_boot.img` 不会被误提交。
 

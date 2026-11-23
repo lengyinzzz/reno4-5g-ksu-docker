@@ -2,17 +2,18 @@ name: build-boot
 
 # ============================================================================
 # 云端编译 OPPO Reno4 5G (PDPM00 / SM7250 lito) 4.19.157 + KernelSU 内核，
-# 只用原厂 boot.img 替换内核重打包，产物只有 boot.img（不出 AnyKernel3 zip）。
+# 用原厂 boot.img 替换内核重打包，一次产出两个可刷的 boot.img：
 #
-# 触发：
-#   - 手动（Actions → build-boot → Run workflow）
-#   - 打 tag：v*（同时会发 Release，前提是 upload_release 场景由 tag 自动开启？否，tag 只构建+artifact）
+#   enforcing   SELinux 严格（KSU 策略注入成功则保持 Enforcing，失败才回退）
+#   permissive  SELinux 宽容（编入 KSU_FORCE_PERMISSIVE，启动后强制 setenforce 0）
+#
+# 不出 AnyKernel3 zip。
 #
 # 原厂 boot.img 从哪来（按顺序自动找）：
 #   1. 仓库里的 boot/stock_boot.img
-#   2. 本仓库 Release 里叫 stock_boot*.img 的 asset
-#   3. Secrets: STOCK_BOOT_URL（可加 STOCK_BOOT_AUTH_HEADER）
-#   4. Secrets: STOCK_BOOT_IMG_B64
+#   2. 本仓库 Release 里叫 stock_boot*.img 的 asset（含 draft）
+#   4. Secrets: KSU_STOCK_BOOT_B64
+#   4. Secrets: KSU_STOCK_BOOT_B64
 # ============================================================================
 
 on:
@@ -37,20 +38,47 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: build-boot-${{ github.ref }}
-  cancel-in-progress: false
-
 env:
   # runner 内存约 7 G，-j3 稳一些；想更快可改 4
   JOBS: "3"
   KSU_EXPECTED_VERSION: "32584"
 
 jobs:
+  prepare:
+    name: 计算版本号
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - id: ver
+        run: |
+          V="${{ inputs.version }}"
+          if [ -z "$V" ]; then
+            V="$(date +%Y%m%d)-$(echo "$GITHUB_SHA" | cut -c1-7)"
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "版本号：$V"
+
   build:
-    name: 编译内核 + 重打包 boot.img
+    name: ${{ matrix.variant }} 变体
+    needs: prepare
     runs-on: ubuntu-22.04
     timeout-minutes: 240
+    concurrency:
+      group: build-boot-${{ github.ref }}-${{ matrix.variant }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: enforcing
+            desc: SELinux 严格（KSU 策略注入成功则保持 Enforcing）
+          - variant: permissive
+            desc: SELinux 宽容（KSU_FORCE_PERMISSIVE，强制 setenforce 0）
+
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      VARIANT: ${{ matrix.variant }}
 
     steps:
       - name: 拉取仓库
@@ -73,27 +101,16 @@ jobs:
           path: toolchain
           key: ${{ runner.os }}-reno4-toolchain-clang-r399163b-v1
 
-      - name: 计算版本号
-        id: ver
-        run: |
-          V="${{ inputs.version }}"
-          if [ -z "$V" ]; then
-            V="$(date +%Y%m%d)-$(git rev-parse --short=7 HEAD)"
-          fi
-          echo "version=$V" >> "$GITHUB_OUTPUT"
-          echo "VERSION=$V" >> "$GITHUB_ENV"
-          echo "产物版本号：$V"
-
       - name: 准备源码树 / 工具链 / KernelSU（并编译）
         shell: bash
         env:
           STOCK_BOOT_URL: ${{ secrets.STOCK_BOOT_URL }}
           STOCK_BOOT_AUTH_HEADER: ${{ secrets.STOCK_BOOT_AUTH_HEADER }}
-          STOCK_BOOT_IMG_B64: ${{ secrets.STOCK_BOOT_IMG_B64 }}
+          KSU_STOCK_BOOT_B64: ${{ secrets.KSU_STOCK_BOOT_B64 }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          bash scripts/docker-build.sh boot 2>&1 | tee build.log
+          bash scripts/docker-build.sh boot 2>&1 | tee "build-$VARIANT.log"
 
       - name: 校验 KernelSU 版本
         run: |
@@ -101,7 +118,7 @@ jobs:
           KSU_VERSION="$((30000 + V))"
           echo "KSU_VERSION=$KSU_VERSION（预期 $KSU_EXPECTED_VERSION）"
           if [ "$KSU_VERSION" != "$KSU_EXPECTED_VERSION" ]; then
-            echo "::warning::KSU_VERSION=$KSU_VERSION 与仓库 pin 的 $KSU_EXPECTED_VERSION 不一致，Manager 可能报版本不匹配"
+            echo "::warning::KSU_VERSION=$KSU_VERSION 与仓库 pin 的 $KSU_EXPECTED_VERSION 不一致"
           fi
 
       - name: 列出产物
@@ -119,8 +136,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log-${{ steps.ver.outputs.version }}
-          path: build.log
+          name: build-log-${{ matrix.variant }}-${{ needs.prepare.outputs.version }}
+          path: build-${{ matrix.variant }}.log
           if-no-files-found: ignore
           retention-days: 7
 
@@ -128,11 +145,11 @@ jobs:
         if: hashFiles('out/boot_*.img') != ''
         uses: actions/upload-artifact@v4
         with:
-          name: boot-img-${{ steps.ver.outputs.version }}
+          name: boot-${{ matrix.variant }}-${{ needs.prepare.outputs.version }}
           path: |
             out/boot_*.img
-            out/Image
-            out/SHA256SUMS
+            out/Image_${{ matrix.variant }}
+            out/SHA256SUMS_${{ matrix.variant }}
           if-no-files-found: error
           retention-days: 30
 
@@ -140,18 +157,19 @@ jobs:
         if: always()
         run: |
           {
-            echo "## 构建结果"
+            echo "## ${{ matrix.variant }} 变体"
             echo
+            echo "- 说明：${{ matrix.desc }}"
             echo "- 版本：\`$VERSION\`"
             echo "- 提交：\`${GITHUB_SHA::7}\`"
             echo
             echo '```'
             ls -lh out 2>/dev/null || echo "out/ 为空"
             echo '```'
-            if [ -f out/SHA256SUMS ]; then
+            if [ -f "out/SHA256SUMS_${{ matrix.variant }}" ]; then
               echo
               echo '```'
-              cat out/SHA256SUMS
+              cat "out/SHA256SUMS_${{ matrix.variant }}"
               echo '```'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
@@ -161,24 +179,43 @@ jobs:
         run: |
           echo "::warning::本次只编出了内核 Image，没有 boot.img —— 需要原厂 boot.img 才能重打包。"
           echo "把原厂 boot.img 放到仓库 boot/stock_boot.img，或上传成本仓库 Release 的 asset（名字 stock_boot.img），"
-          echo "或配置 Secrets：STOCK_BOOT_URL / STOCK_BOOT_IMG_B64。"
+          echo "或配置 Secrets：STOCK_BOOT_URL / KSU_STOCK_BOOT_B64。"
           exit 0
 
-      - name: 发布到 Release
-        if: inputs.upload_release
+  release:
+    name: 发布 boot.img
+    needs: [prepare, build]
+    if: inputs.upload_release
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: boot-*
+          path: dl
+          merge-multiple: true
+
+      - name: 发布
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.release_tag || steps.ver.outputs.version }}
-          name: Reno4 5G KSU ${{ steps.ver.outputs.version }}
+          tag_name: ${{ inputs.release_tag || needs.prepare.outputs.version }}
+          name: Reno4 5G KSU ${{ needs.prepare.outputs.version }}
           files: |
-            out/boot_*.img
-            out/SHA256SUMS
+            dl/*.img
+            dl/SHA256SUMS_*
+          fail_on_unmatched_files: false
           body: |
-            OPPO Reno4 5G (PDPM00 / SM7250 lito) 4.19.157 + KernelSU 内核 boot.img
+            OPPO Reno4 5G (PDPM00 / SM7250 lito) 4.19.157 + KernelSU 内核
 
-            - 版本：${{ steps.ver.outputs.version }}
+            - 版本：${{ needs.prepare.outputs.version }}
             - 源码提交：${{ github.sha }}
-            - KernelSU 版本：KSU_VERSION=${{ env.KSU_EXPECTED_VERSION }}
+            - KernelSU：KSU_VERSION=${{ env.KSU_EXPECTED_VERSION }}
             - 只替换原厂 boot.img 的内核，保留原厂 ramdisk/dtb
 
-            刷入：`fastboot flash boot boot_*.img`，刷前确认机型与系统版本一致。
+            两个变体，刷哪个都能测：
+
+            | 文件 | SELinux | 说明 |
+            |---|---|---|
+            | `boot_*_enforcing.img` | Enforcing | KSU 策略注入成功即保持严格 |
+            | `boot_*_permissive.img` | Permissive | 编入 KSU_FORCE_PERMISSIVE，启动后强制宽容 |
+
+            刷入：`fastboot flash boot boot_*.img`；刷完 `adb shell getenforce` 确认状态。

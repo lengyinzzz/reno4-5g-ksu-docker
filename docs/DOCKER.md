@@ -36,7 +36,7 @@ workflow 会自动下载（用内置 `GITHUB_TOKEN`，私有仓库也行）。
 |---|---|
 | `STOCK_BOOT_URL` | boot.img（或含 boot.img 的 zip）直链 |
 | `STOCK_BOOT_AUTH_HEADER` | 直链需要的请求头，形如 `Authorization: Bearer xxx` |
-| `STOCK_BOOT_IMG_B64` | base64 的 boot.img（Secret 单值上限 48 KB，只适合极小镜像） |
+| `KSU_STOCK_BOOT_B64` | base64 的 boot.img（Secret 单值上限 48 KB，只适合极小镜像） |
 
 没有原厂 boot.img 时 workflow 会失败并给出提示，只留 `Image` 在日志里。
 

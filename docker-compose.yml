@@ -19,6 +19,7 @@ services:
       - ./:/work
     environment:
       TARGET: ${TARGET:-boot}
+      VARIANT: ${VARIANT:-enforcing}
       JOBS: ${JOBS:-}
       VERSION: ${VERSION:-}
       STOCK_BOOT_IMG: ${STOCK_BOOT_IMG:-}

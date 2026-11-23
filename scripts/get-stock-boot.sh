@@ -10,7 +10,7 @@
 #   2. boot/ 目录里的 stock_boot.img / boot.img / *.img
 #   3. 本仓库 Release 里名为 stock_boot*.img 的 asset（需要 GITHUB_REPOSITORY + GITHUB_TOKEN）
 #   4. $STOCK_BOOT_URL（可配 $STOCK_BOOT_AUTH_HEADER，形如 "Authorization: Bearer xxx"）
-#   5. $STOCK_BOOT_IMG_B64（base64，只适合很小的镜像）
+#   5. $KSU_STOCK_BOOT_B64（base64，只适合很小的镜像）
 #
 # 用法：
 #   scripts/get-stock-boot.sh [目标路径]     # 默认 boot/stock_boot.img
@@ -22,7 +22,6 @@ DEST="${1:-$ROOT/boot/stock_boot.img}"
 mkdir -p "$(dirname "$DEST")"
 
 log()  { printf '[stock-boot] %s\n' "$*" >&2; }
-die()  { printf '[stock-boot][x] %s\n' "$*" >&2; exit 3; }
 ok()   { log "使用 $1"; readlink -f "$1"; exit 0; }
 
 is_bootimg() {
@@ -54,12 +53,14 @@ dest = sys.argv[1]
 repo = os.environ["GITHUB_REPOSITORY"]
 tok = os.environ["GITHUB_TOKEN"]
 
+
 def req(url, accept="application/vnd.github+json"):
     return urllib.request.Request(url, headers={
         "Authorization": "Bearer " + tok,
         "Accept": accept,
         "User-Agent": "reno4-5g-ksu",
     })
+
 
 try:
     with urllib.request.urlopen(req(f"https://api.github.com/repos/{repo}/releases?per_page=50"), timeout=60) as r:
@@ -76,7 +77,7 @@ if not assets:
 
 a = assets[0]
 os.makedirs(os.path.dirname(dest) or ".", exist_ok=True)
-with urllib.request.urlopen(req(a["url"], "application/octet-stream"), timeout=600) as r, open(dest, "wb") as f:
+with urllib.request.urlopen(req(a["url"], "application/octet-stream"), timeout=900) as r, open(dest, "wb") as f:
     while True:
         chunk = r.read(1 << 20)
         if not chunk:
@@ -100,7 +101,7 @@ if auth:
     k, sep, v = auth.partition(":")
     if sep:
         headers[k.strip()] = v.strip()
-with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=600) as r, open(dest, "wb") as f:
+with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=900) as r, open(dest, "wb") as f:
     while True:
         chunk = r.read(1 << 20)
         if not chunk:
@@ -111,6 +112,7 @@ PY
         log "下载的是 zip，取出里面的 boot img"
         python3 - "$DEST" <<'PY'
 import sys, zipfile
+
 src = sys.argv[1]
 with zipfile.ZipFile(src) as z:
     names = [n for n in z.namelist() if n.lower().endswith(".img") and "boot" in n.lower()]
@@ -126,16 +128,16 @@ PY
 fi
 
 # 5) base64
-if [ -n "${STOCK_BOOT_IMG_B64:-}" ]; then
-    log "解码 STOCK_BOOT_IMG_B64"
-    if printf '%s' "$STOCK_BOOT_IMG_B64" | base64 -d > "$DEST" 2>/dev/null; then
+if [ -n "${KSU_STOCK_BOOT_B64:-}" ]; then
+    log "解码 KSU_STOCK_BOOT_B64"
+    if printf '%s' "$KSU_STOCK_BOOT_B64" | base64 -d > "$DEST" 2>/dev/null; then
         if is_bootimg "$DEST"; then ok "$DEST"; fi
     fi
-    log "STOCK_BOOT_IMG_B64 解码失败或不是 boot.img，忽略"
+    log "KSU_STOCK_BOOT_B64 解码失败或不是 boot.img，忽略"
     rm -f "$DEST"
 fi
 
 log "没有找到原厂 boot.img"
 log "  放一份到 boot/stock_boot.img，或上传成 Release asset（stock_boot.img），"
-log "  或设置 STOCK_BOOT_IMG / STOCK_BOOT_URL / STOCK_BOOT_IMG_B64"
+log "  或设置 STOCK_BOOT_IMG / STOCK_BOOT_URL / KSU_STOCK_BOOT_B64"
 exit 3
