@@ -48,6 +48,12 @@ scripts/           clone 官方树、下载工具链、构建、打包、提取 
 release/           AnyKernel3 的设备相关配置（anykernel.sh）与其 LICENSE
 docs/              构建 / 刷机 / SELinux 4.19 实现说明 / 变更记录
 base/              上游 base commit 与补丁应用顺序
+Dockerfile         Docker 构建镜像（本地 / CI 通用）
+docker-compose.yml 本地 compose 入口（build / image / shell）
+docker/            容器 entrypoint
+boot/              放原厂 boot.img 的位置（不入库）与说明
+.github/workflows  build-boot.yml（编译+出 boot.img）、docker-image.yml（验证镜像）
+tools/             运行时下载的 magiskboot（不入库）
 ```
 
 本仓库**只包含补丁、脚本与文档**：官方内核树与 vendor 树（约 1.5 G）由 `scripts/prepare-tree.sh`
@@ -76,6 +82,28 @@ scripts/make-ak3-zip.sh kernel/msm-4.19/out/arch/arm64/boot/Image v1.0.0
 ```
 
 构建环境、依赖包与常见问题见 [`docs/BUILD.md`](docs/BUILD.md)；刷入与回退见 [`docs/FLASH.md`](docs/FLASH.md)。
+
+## 云端编译：GitHub Actions / Docker（只出 boot.img）
+
+不想在本机装 4 GB 环境，就让 Actions 编。产物只有 `boot.img`，不打 AnyKernel3 zip。
+
+```bash
+# 1) 原厂 boot.img 放到 boot/stock_boot.img（或上传成本仓库 Release 的 asset：stock_boot.img）
+# 2) Actions → build-boot → Run workflow
+# 3) 下载 Artifact boot-img-<版本> → boot_Reno4_5G_KSU_<版本>.img
+```
+
+本地 Docker 同样一套流程：
+
+```bash
+docker compose run --rm build                  # 编译 + 重打包 → out/boot_Reno4_5G_KSU_<日期>.img
+TARGET=image docker compose run --rm build     # 只编译 → out/Image
+docker compose run --rm build shell            # 进容器排查
+```
+
+- 工作流：[`.github/workflows/build-boot.yml`](.github/workflows/build-boot.yml)
+- 用法与 Secrets 说明：[`docs/DOCKER.md`](docs/DOCKER.md)
+- 原厂 boot.img 从哪来：[`boot/README.md`](boot/README.md)
 
 ## 许可
 

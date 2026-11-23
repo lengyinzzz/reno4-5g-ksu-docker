@@ -1,0 +1,27 @@
+# ============================================================================
+# 本地 Docker 构建（等价于 GitHub Actions 的那套流程）
+#
+#   docker compose run --rm build            # 编译 + 出 boot.img（需 boot/stock_boot.img）
+#   TARGET=image docker compose run --rm build   # 只编译出 Image
+#   docker compose run --rm build shell          # 进容器排查
+#
+# 首次会下载官方树（约 1.5 G）+ 工具链（约 1.8 G），挂在当前目录，可复用。
+# ============================================================================
+services:
+  build:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: reno4-5g-ksu-build:local
+    init: true
+    working_dir: /work
+    volumes:
+      - ./:/work
+    environment:
+      TARGET: ${TARGET:-boot}
+      JOBS: ${JOBS:-}
+      VERSION: ${VERSION:-}
+      STOCK_BOOT_IMG: ${STOCK_BOOT_IMG:-}
+      STOCK_BOOT_URL: ${STOCK_BOOT_URL:-}
+      MAGISK_VERSION: ${MAGISK_VERSION:-27.0}
+    command: ["${TARGET:-boot}"]

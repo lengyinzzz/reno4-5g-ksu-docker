@@ -1,0 +1,173 @@
+name: build-boot
+
+# ============================================================================
+# 云端编译 OPPO Reno4 5G (PDPM00 / SM7250 lito) 4.19.157 + KernelSU 内核，
+# 只用原厂 boot.img 替换内核重打包，产物只有 boot.img（不出 AnyKernel3 zip）。
+#
+# 触发：
+#   - 手动（Actions → build-boot → Run workflow）
+#   - 打 tag：v*（同时会发 Release，前提是 upload_release 场景由 tag 自动开启？否，tag 只构建+artifact）
+#
+# 原厂 boot.img 从哪来（按顺序自动找）：
+#   1. 仓库里的 boot/stock_boot.img
+#   2. 本仓库 Release 里叫 stock_boot*.img 的 asset
+#   3. Secrets: STOCK_BOOT_URL（可加 STOCK_BOOT_AUTH_HEADER）
+#   4. Secrets: STOCK_BOOT_IMG_B64
+# ============================================================================
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "产物版本号（留空 = 日期-短SHA）"
+        required: false
+        default: ""
+      upload_release:
+        description: "构建完成后发布到 Release"
+        type: boolean
+        default: false
+      release_tag:
+        description: "Release tag（upload_release 打开时用；留空则用版本号）"
+        required: false
+        default: ""
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-boot-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # runner 内存约 7 G，-j3 稳一些；想更快可改 4
+  JOBS: "3"
+  KSU_EXPECTED_VERSION: "32584"
+
+jobs:
+  build:
+    name: 编译内核 + 重打包 boot.img
+    runs-on: ubuntu-22.04
+    timeout-minutes: 240
+
+    steps:
+      - name: 拉取仓库
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: 安装构建依赖
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            build-essential bc bison flex libssl-dev libncurses-dev libelf-dev \
+            cpio perl python3 kmod lz4 xz-utils zstd device-tree-compiler \
+            git git-lfs curl ca-certificates unzip zip rsync file xxd
+          git lfs install --skip-repo
+
+      - name: 缓存工具链（clang-r399163b + GCC 4.9）
+        uses: actions/cache@v4
+        with:
+          path: toolchain
+          key: ${{ runner.os }}-reno4-toolchain-clang-r399163b-v1
+
+      - name: 计算版本号
+        id: ver
+        run: |
+          V="${{ inputs.version }}"
+          if [ -z "$V" ]; then
+            V="$(date +%Y%m%d)-$(git rev-parse --short=7 HEAD)"
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+          echo "产物版本号：$V"
+
+      - name: 准备源码树 / 工具链 / KernelSU（并编译）
+        env:
+          STOCK_BOOT_URL: ${{ secrets.STOCK_BOOT_URL }}
+          STOCK_BOOT_AUTH_HEADER: ${{ secrets.STOCK_BOOT_AUTH_HEADER }}
+          STOCK_BOOT_IMG_B64: ${{ secrets.STOCK_BOOT_IMG_B64 }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bash scripts/docker-build.sh boot 2>&1 | tee build.log
+
+      - name: 校验 KernelSU 版本
+        run: |
+          V="$(git -C kernel/msm-4.19/KernelSU rev-list --count HEAD 2>/dev/null || echo 0)"
+          KSU_VERSION="$((30000 + V))"
+          echo "KSU_VERSION=$KSU_VERSION（预期 $KSU_EXPECTED_VERSION）"
+          if [ "$KSU_VERSION" != "$KSU_EXPECTED_VERSION" ]; then
+            echo "::warning::KSU_VERSION=$KSU_VERSION 与仓库 pin 的 $KSU_EXPECTED_VERSION 不一致，Manager 可能报版本不匹配"
+          fi
+
+      - name: 列出产物
+        if: always()
+        run: |
+          echo "== out/ =="
+          ls -lh out 2>/dev/null || true
+          echo
+          for f in out/*.img; do
+            [ -f "$f" ] || continue
+            echo "$f  sha256=$(sha256sum "$f" | awk '{print $1}')"
+          done
+
+      - name: 上传 boot.img 产物
+        if: hashFiles('out/boot_*.img') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-img-${{ steps.ver.outputs.version }}
+          path: |
+            out/boot_*.img
+            out/Image
+            out/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: 写入构建摘要
+        if: always()
+        run: |
+          {
+            echo "## 构建结果"
+            echo
+            echo "- 版本：\`$VERSION\`"
+            echo "- 提交：\`${GITHUB_SHA::7}\`"
+            echo
+            echo '```'
+            ls -lh out 2>/dev/null || echo "out/ 为空"
+            echo '```'
+            if [ -f out/SHA256SUMS ]; then
+              echo
+              echo '```'
+              cat out/SHA256SUMS
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 没有原厂 boot.img 时给出提示
+        if: hashFiles('out/boot_*.img') == ''
+        run: |
+          echo "::warning::本次只编出了内核 Image，没有 boot.img —— 需要原厂 boot.img 才能重打包。"
+          echo "把原厂 boot.img 放到仓库 boot/stock_boot.img，或上传成本仓库 Release 的 asset（名字 stock_boot.img），"
+          echo "或配置 Secrets：STOCK_BOOT_URL / STOCK_BOOT_IMG_B64。"
+          exit 0
+
+      - name: 发布到 Release
+        if: inputs.upload_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag || steps.ver.outputs.version }}
+          name: Reno4 5G KSU ${{ steps.ver.outputs.version }}
+          files: |
+            out/boot_*.img
+            out/SHA256SUMS
+          body: |
+            OPPO Reno4 5G (PDPM00 / SM7250 lito) 4.19.157 + KernelSU 内核 boot.img
+
+            - 版本：${{ steps.ver.outputs.version }}
+            - 源码提交：${{ github.sha }}
+            - KernelSU 版本：KSU_VERSION=${{ env.KSU_EXPECTED_VERSION }}
+            - 只替换原厂 boot.img 的内核，保留原厂 ramdisk/dtb
+
+            刷入：`fastboot flash boot boot_*.img`，刷前确认机型与系统版本一致。

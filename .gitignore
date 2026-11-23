@@ -18,3 +18,7 @@ local/
 .vscode/
 .idea/
 .DS_Store
+
+# 本地工具与镜像输入
+/tools/
+/boot/*.img

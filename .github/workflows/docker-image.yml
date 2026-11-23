@@ -1,0 +1,47 @@
+name: docker-image
+
+# 只验证 Dockerfile 能构建（不跑整颗内核，约 2–3 分钟）。
+# 需要镜像就去 Actions 的 artifact，或本地 docker build。
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "docker/**"
+      - "scripts/**"
+      - ".github/workflows/docker-image.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: 构建构建镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: reno4-5g-ksu-build:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: 冒烟测试（容器内看工具链是否齐）
+        run: |
+          docker run --rm reno4-5g-ksu-build:ci shell -c '
+            set -e
+            for t in make clang gcc bc bison flex python3 git unzip zip lz4 zstd dtc file; do
+              command -v "$t" >/dev/null || { echo "缺少 $t"; exit 1; }
+            done
+            echo "工具齐全"
+          '

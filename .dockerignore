@@ -1,0 +1,14 @@
+.git
+.gitignore
+kernel/
+vendor/
+.modules-src/
+toolchain/
+out/
+boot/*.img
+tools/
+*.img
+*.zip
+*.log
+*.tar
+*.tar.gz
