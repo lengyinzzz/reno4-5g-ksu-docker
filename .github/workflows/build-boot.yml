@@ -23,6 +23,14 @@ on:
         description: "产物版本号（留空 = 日期-短SHA）"
         required: false
         default: ""
+      variant:
+        description: "构建哪个变体"
+        type: choice
+        options:
+          - both
+          - enforcing
+          - permissive
+        default: both
       upload_release:
         description: "构建完成后发布到 Release"
         type: boolean
@@ -62,6 +70,7 @@ jobs:
   build:
     name: ${{ matrix.variant }} 变体
     needs: prepare
+    if: inputs.variant == 'both' || inputs.variant == '' || inputs.variant == matrix.variant
     runs-on: ubuntu-22.04
     timeout-minutes: 240
     concurrency:
