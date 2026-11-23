@@ -149,7 +149,15 @@ apply_patch "$ROOT/vendor" "$ROOT/patches/vendor/0001-lito-devicetree-and-oplus-
     || die "vendor 补丁应用失败"
 require_marker "$ROOT/vendor/qcom/proprietary/devicetree-4.19/19065/Makefile" 'CONFIG_ARCH_KONA' "vendor devicetree Makefile 改动"
 
+# 6.5) 接入 vendor/oplus 模块（软链 + Makefile/Kconfig）
+log "接入 vendor/oplus 模块"
+bash "$ROOT/scripts/wire-vendor-modules.sh" "$KERNEL_DIR" "$ROOT/vendor" \
+    || die "wire-vendor-modules.sh 执行失败"
+
 # 7) 修补被引用但没开源的目录（net/oplus_modules 等）
+log "补软链 vendor 私有头文件（soc/oplus/*）"
+python3 "$ROOT/scripts/link-oplus-headers.py" "$KERNEL_DIR" "$ROOT/vendor" || true
+
 log "修补缺失的 Kconfig source / Makefile 子目录"
 python3 "$ROOT/scripts/fix-missing-refs.py" "$KERNEL_DIR" || die "fix-missing-refs.py 执行失败"
 
