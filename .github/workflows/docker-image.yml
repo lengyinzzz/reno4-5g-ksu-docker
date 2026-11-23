@@ -40,7 +40,7 @@ jobs:
         run: |
           docker run --rm reno4-5g-ksu-build:ci shell -c '
             set -e
-            for t in make clang gcc bc bison flex python3 git unzip zip lz4 zstd dtc file; do
+            for t in make gcc bc bison flex python3 git git-lfs unzip zip lz4 zstd dtc file; do
               command -v "$t" >/dev/null || { echo "缺少 $t"; exit 1; }
             done
             echo "工具齐全"

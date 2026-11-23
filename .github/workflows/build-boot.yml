@@ -85,12 +85,14 @@ jobs:
           echo "产物版本号：$V"
 
       - name: 准备源码树 / 工具链 / KernelSU（并编译）
+        shell: bash
         env:
           STOCK_BOOT_URL: ${{ secrets.STOCK_BOOT_URL }}
           STOCK_BOOT_AUTH_HEADER: ${{ secrets.STOCK_BOOT_AUTH_HEADER }}
           STOCK_BOOT_IMG_B64: ${{ secrets.STOCK_BOOT_IMG_B64 }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           bash scripts/docker-build.sh boot 2>&1 | tee build.log
 
       - name: 校验 KernelSU 版本
@@ -112,6 +114,15 @@ jobs:
             [ -f "$f" ] || continue
             echo "$f  sha256=$(sha256sum "$f" | awk '{print $1}')"
           done
+
+      - name: 上传构建日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ steps.ver.outputs.version }}
+          path: build.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: 上传 boot.img 产物
         if: hashFiles('out/boot_*.img') != ''

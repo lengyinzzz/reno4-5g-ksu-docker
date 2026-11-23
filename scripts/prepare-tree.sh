@@ -107,6 +107,21 @@ for d in camera display video; do
     fi
 done
 
+# 3.5) 补全 S 分支没有开源的 net/oplus_modules（同仓库 T.13 分支里有，内核同为 4.19.157）
+OPLUS_MODULES_BRANCH="${OPLUS_MODULES_BRANCH:-oppo/sm7250_t_13.0.0_reno5_5g}"
+if [ ! -f "$KERNEL_DIR/net/oplus_modules/Kconfig" ]; then
+    log "补全 net/oplus_modules（来源：$OPLUS_MODULES_BRANCH）"
+    git -C "$KERNEL_DIR" fetch --depth 1 origin "$OPLUS_MODULES_BRANCH" \
+        || die "fetch $OPLUS_MODULES_BRANCH 失败"
+    # 只检出这一个目录；reset 让它们回到未跟踪状态，不干扰后续 git apply
+    git -C "$KERNEL_DIR" checkout FETCH_HEAD -- net/oplus_modules \
+        || die "检出 net/oplus_modules 失败"
+    git -C "$KERNEL_DIR" reset -q -- net/oplus_modules 2>/dev/null || true
+    log "已补全 net/oplus_modules（$(ls "$KERNEL_DIR/net/oplus_modules" | wc -l) 个条目）"
+else
+    log "net/oplus_modules 已存在，跳过"
+fi
+
 # 4) .gitignore 调整（让 techpack 子目录被跟踪）
 apply_patch "$KERNEL_DIR" "$ROOT/patches/kernel/0000-techpack-gitignore.patch" \
     || die "techpack .gitignore 补丁应用失败"
@@ -134,7 +149,11 @@ apply_patch "$ROOT/vendor" "$ROOT/patches/vendor/0001-lito-devicetree-and-oplus-
     || die "vendor 补丁应用失败"
 require_marker "$ROOT/vendor/qcom/proprietary/devicetree-4.19/19065/Makefile" 'CONFIG_ARCH_KONA' "vendor devicetree Makefile 改动"
 
-# 7) 补丁新增的文件（defconfig 与头文件）
+# 7) 修补被引用但没开源的目录（net/oplus_modules 等）
+log "修补缺失的 Kconfig source / Makefile 子目录"
+python3 "$ROOT/scripts/fix-missing-refs.py" "$KERNEL_DIR" || die "fix-missing-refs.py 执行失败"
+
+# 8) 补丁新增的文件（defconfig 与头文件）
 if [ -d "$ROOT/patches/kernel/new-files" ]; then
     log "拷入补丁新增文件（stock_lito_defconfig 等）"
     cp -a "$ROOT/patches/kernel/new-files/." "$KERNEL_DIR/"

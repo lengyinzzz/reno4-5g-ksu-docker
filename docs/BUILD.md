@@ -94,6 +94,8 @@ scripts/repack_bootimg.sh <你的原厂 boot.img> \
 | 编译报 `strict-prototypes` 错误 | 确认 `KCFLAGS` 生效 |
 | 工具链脚本报 `python: not found` | AOSP GCC/binutils 的 wrapper 原本是 python2 shebang，本项目已改为 python3；若自行下载旧版请手动修 |
 | `make` 报 devicetree 缺 lagoon | 确认 `CONFIG_ARCH_LAGOON` 已禁用 |
+| `net/Kconfig:483: can't open file "net/oplus_modules/Kconfig"` | S 分支没有开源该目录；`prepare-tree.sh` 会从同仓库 `oppo/sm7250_t_13.0.0_reno5_5g` 分支检出 `net/oplus_modules/` 补全（内核同为 4.19.157） |
+| 其它 Kconfig/Makefile 指向不存在的目录 | `scripts/fix-missing-refs.py` 会补空 stub（`prepare-tree.sh` 自动执行） |
 | 构建中途中断、`out/` 疑似损坏 | `rm -rf out` 后重编（增量偶发不一致） |
 | KernelSU Manager 提示 `kernel too low` / `manager too low` | KernelSU 版本号不匹配：确认 `scripts/prepare-kernelsu.sh` 正常执行（`KernelSU` 必须是一个 git 仓库且 checkout 在 `62e88ca9`），配合 Manager `32584` |
 
