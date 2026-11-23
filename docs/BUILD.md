@@ -113,3 +113,22 @@ scripts/make-ak3-zip.sh kernel/msm-4.19/out/arch/arm64/boot/Image v1.0.0
    放入 `Image` 并生成 zip 与 `SHA256SUMS`。zip 内保留 AnyKernel3 的 `LICENSE`，
    且**不含**原厂 ramdisk/dtb（刷机时从设备自身 boot 分区读取）。
 4. 发布时把 zip 与 `SHA256SUMS` 上传到 Release，并在 Release notes 里写明对应的源码 commit。
+
+## 6. 开源树缺的东西怎么补（重要）
+
+OPPO 开源内核树里有几处"引用了但没开源"的东西，`prepare-tree.sh` 会自动处理：
+
+| 缺失 | 处理 |
+|---|---|
+| `net/oplus_modules/`（S 分支没有） | 从同仓库 `oppo/sm7250_t_13.0.0_reno5_5g`（同为 4.19.157）检出 |
+| `drivers/soc/oplus/*`、`include/soc/oplus/*` 大量是指向 `../../../../../vendor/oplus/kernel/` 的相对软链 | `wire-vendor-modules.sh` 建 `kernel/vendor -> ../vendor`，让这些软链解析到官方 modules 仓库的 vendor 树 |
+| 开源树漏接 `system/`、`wakelock_profiler/` 两个 vendor 模块 | 补软链 + 在 `drivers/soc/oplus/Makefile` 加 `obj-y`，`Kconfig` 补 `source`，让 defconfig 里的 `CONFIG_OPLUS_*` 生效 |
+| 其它零星指向不存在目录的 Kconfig source / `obj-y += dir/` | `fix-missing-refs.py` 补空 stub |
+
+所以构建目录布局必须是：
+
+```
+<repo>/
+├── kernel/msm-4.19/    # 内核（含指向 vendor 的软链）
+└── vendor/            # 来自 modules 仓库（软链目标）
+```
