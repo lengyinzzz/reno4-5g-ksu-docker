@@ -30,6 +30,8 @@ on:
           - both
           - enforcing
           - permissive
+          - noksu
+          - all
         default: both
       upload_release:
         description: "构建完成后发布到 Release"
@@ -78,7 +80,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: ${{ fromJSON(inputs.variant == 'enforcing' && '["enforcing"]' || inputs.variant == 'permissive' && '["permissive"]' || '["enforcing","permissive"]') }}
+        variant: ${{ fromJSON(inputs.variant == 'all' && '["enforcing","permissive","noksu"]' || inputs.variant == 'enforcing' && '["enforcing"]' || inputs.variant == 'permissive' && '["permissive"]' || inputs.variant == 'noksu' && '["noksu"]' || '["enforcing","permissive"]') }}
 
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
@@ -163,7 +165,7 @@ jobs:
           {
             echo "## ${{ matrix.variant }} 变体"
             echo
-            echo "- 说明：${{ matrix.variant == 'permissive' && 'SELinux 宽容（KSU_FORCE_PERMISSIVE，强制 setenforce 0）' || 'SELinux 严格（KSU 策略注入成功则保持 Enforcing）' }}"
+            echo "- 说明：${{ matrix.variant == 'permissive' && 'SELinux 宽容（KSU_FORCE_PERMISSIVE，强制 setenforce 0）' || matrix.variant == 'noksu' && '不带 KernelSU，给 Magisk 修补用' || 'SELinux 严格（KSU 策略注入成功则保持 Enforcing）' }}"
             echo "- 版本：\`$VERSION\`"
             echo "- 提交：\`${GITHUB_SHA::7}\`"
             echo
