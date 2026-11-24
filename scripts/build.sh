@@ -75,9 +75,15 @@ if [ "${DOCKER:-0}" = "1" ]; then
         --enable USER_NS \
         --enable CGROUP_DEVICE \
         --enable CGROUP_PIDS \
+        --enable BRIDGE_NETFILTER \
+        --enable NETFILTER_XT_MATCH_ADDRTYPE \
+        --enable VXLAN \
+        --enable MACVLAN \
+        --enable IPVLAN \
+        --enable BRIDGE_VLAN_FILTERING \
         --enable DM_THIN_PROVISIONING )
     "${MAKE_CMD[@]}" olddefconfig
-    for opt in PID_NS IPC_NS USER_NS CGROUP_DEVICE; do
+    for opt in PID_NS IPC_NS USER_NS CGROUP_DEVICE CGROUP_PIDS; do
         if ! grep -q "^CONFIG_${opt}=y" "$OUT_DIR/.config"; then
             die "docker 变体：CONFIG_${opt} 未能开启"
         fi
