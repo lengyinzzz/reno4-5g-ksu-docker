@@ -61,7 +61,7 @@ case "$VARIANT" in
         export DOCKER_SET=min
         export OUT_DIR="${OUT_DIR:-$KERNEL_DIR/out-docker}"
         ;;
-    docker_a|docker_b|docker_c|docker_d)
+    docker_a|docker_b|docker_c|docker_d|docker_e)
         # 二分验证：单独开启某一项，用于定位哪个开关影响网络
         export KSU=0
         export DOCKER=1
@@ -126,6 +126,8 @@ elif [ "$VARIANT" = "docker_c" ]; then
     BOOTIMG="$OUT/boot_Reno4_5G_DockerC_onlyPIDNS_${VERSION}.img"
 elif [ "$VARIANT" = "docker_d" ]; then
     BOOTIMG="$OUT/boot_Reno4_5G_DockerD_SYSVIPC_IPCNS_${VERSION}.img"
+elif [ "$VARIANT" = "docker_e" ]; then
+    BOOTIMG="$OUT/boot_Reno4_5G_DockerE_PIDNS_CGROUPDEV_${VERSION}.img"
 else
     BOOTIMG="$OUT/boot_Reno4_5G_KSU_${VERSION}_${VARIANT}.img"
 fi
