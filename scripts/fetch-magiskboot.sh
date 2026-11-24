@@ -89,10 +89,13 @@ if command -v file >/dev/null 2>&1; then
 fi
 
 mv -f "$OUT.tmp" "$OUT"
-log "冒烟测试"
-if ! "$OUT" 2>&1 | head -n 5; then
-    die "magiskboot 无法执行（缺依赖？）"
-fi
+log "冒烟测试（无参数运行会打印用法并返回非零，属正常）"
+smoke="$(set +o pipefail; "$OUT" 2>&1 | head -n 3 || true)"
+printf '%s\n' "$smoke" >&2
+case "$smoke" in
+    *agiskboot*|*sage*|*Usage*|*usage*) : ;;
+    *) die "magiskboot 无法执行（缺依赖？输出：$smoke）" ;;
+esac
 
 log "OK：$OUT"
 readlink -f "$OUT"
