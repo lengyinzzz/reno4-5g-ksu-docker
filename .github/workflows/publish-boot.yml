@@ -1,0 +1,57 @@
+name: publish-boot
+
+# 把某次 build-boot 运行产出的 boot.img 搬到 Release（云端搬运，不重新编译）。
+# 用法：Actions → publish-boot → Run workflow，填 build-boot 的 run id 与 tag。
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "build-boot 的 run id（运行页面 URL 里的数字）"
+        required: true
+      tag:
+        description: "Release tag，例如 v1.0.0-20261124"
+        required: true
+      name:
+        description: "Release 标题（留空用 tag）"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: 取回该次运行的 boot artifact
+        uses: actions/download-artifact@v4
+        with:
+          pattern: boot-*
+          path: dl
+          merge-multiple: true
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 列出取回的文件
+        run: ls -lh dl
+
+      - name: 发布到 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          name: ${{ inputs.name || inputs.tag }}
+          files: |
+            dl/*.img
+            dl/SHA256SUMS_*
+          fail_on_unmatched_files: false
+          body: |
+            OPPO Reno4 5G (PDPM00 / SM7250 lito) 4.19.157 + KernelSU
+
+            - 构建运行：[#${{ inputs.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ inputs.run_id }})
+            - `boot_*_enforcing.img`：SELinux 严格（默认，推荐先刷）
+            - `boot_*_permissive.img`：SELinux 宽容（强制 setenforce 0）
+            - 只替换原厂 boot.img 的内核，ramdisk/dtb/header 保留原厂
+
+            刷入：`fastboot flash boot boot_*_enforcing.img`；卡住就刷回原厂 boot.img。
