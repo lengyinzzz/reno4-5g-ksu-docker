@@ -65,6 +65,26 @@ if [ "${KSU:-1}" = "0" ]; then
     log "已确认 CONFIG_KSU 关闭"
 fi
 
+# docker 变体：开启跑容器需要但原厂 defconfig 关掉的选项
+if [ "${DOCKER:-0}" = "1" ]; then
+    log "docker 变体：开启 PID_NS / IPC_NS / USER_NS / CGROUP_DEVICE 等"
+    ( cd "$KERNEL_DIR" && scripts/config --file "$OUT_DIR/.config" \
+        --enable NAMESPACES \
+        --enable PID_NS \
+        --enable IPC_NS \
+        --enable USER_NS \
+        --enable CGROUP_DEVICE \
+        --enable CGROUP_PIDS \
+        --enable DM_THIN_PROVISIONING )
+    "${MAKE_CMD[@]}" olddefconfig
+    for opt in PID_NS IPC_NS USER_NS CGROUP_DEVICE; do
+        if ! grep -q "^CONFIG_${opt}=y" "$OUT_DIR/.config"; then
+            die "docker 变体：CONFIG_${opt} 未能开启"
+        fi
+    done
+    log "已确认容器所需配置已开启"
+fi
+
 log "编译（-j$JOBS，KCFLAGS=\"$KCFLAGS\"）"
 "${MAKE_CMD[@]}" -j"$JOBS"
 
