@@ -141,6 +141,21 @@ else
     fi
 fi
 
+# 5.5) devicetree: 项目目录的 camera/ 补到 qcom/ 下
+#      （qcom/lito.dtsi 里 #include "camera/lito-camera.dtsi"，而 camera 只在
+#       项目目录 19065/ 里，OPPO 原厂构建会把它并进 qcom/）
+DT_DIR="$ROOT/vendor/qcom/proprietary/devicetree-4.19"
+if [ -d "$DT_DIR/19065/camera" ] && [ ! -e "$DT_DIR/qcom/camera" ]; then
+    ln -sfn ../19065/camera "$DT_DIR/qcom/camera"
+    log "补链 devicetree qcom/camera -> ../19065/camera"
+fi
+for sub in display; do
+    if [ -d "$DT_DIR/19065/$sub" ] && [ ! -e "$DT_DIR/qcom/$sub" ]; then
+        ln -sfn "../19065/$sub" "$DT_DIR/qcom/$sub"
+        log "补链 devicetree qcom/$sub -> ../19065/$sub"
+    fi
+done
+
 # 6) 本项目补丁
 apply_patch "$KERNEL_DIR" "$ROOT/patches/kernel/0001-reno4-5g-kernel-4.19-kernelsu.patch" \
     || die "内核补丁应用失败"
