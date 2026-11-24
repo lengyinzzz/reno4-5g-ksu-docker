@@ -54,8 +54,14 @@ case "$VARIANT" in
         export KSU=0
         export OUT_DIR="${OUT_DIR:-$KERNEL_DIR/out-noksu}"
         ;;
+    docker)
+        # 不带 KernelSU + 开启容器所需内核选项（PID_NS/IPC_NS/USER_NS 等）
+        export KSU=0
+        export DOCKER=1
+        export OUT_DIR="${OUT_DIR:-$KERNEL_DIR/out-docker}"
+        ;;
     *)
-        die "VARIANT 只能是 enforcing / permissive / noksu（当前：$VARIANT）"
+        die "VARIANT 只能是 enforcing / permissive / noksu / docker（当前：$VARIANT）"
         ;;
 esac
 
@@ -102,6 +108,8 @@ fi
 MB="$(bash scripts/fetch-magiskboot.sh)"
 if [ "$VARIANT" = "noksu" ]; then
     BOOTIMG="$OUT/boot_Reno4_5G_Magisk_${VERSION}.img"
+elif [ "$VARIANT" = "docker" ]; then
+    BOOTIMG="$OUT/boot_Reno4_5G_Magisk_Docker_${VERSION}.img"
 else
     BOOTIMG="$OUT/boot_Reno4_5G_KSU_${VERSION}_${VARIANT}.img"
 fi
