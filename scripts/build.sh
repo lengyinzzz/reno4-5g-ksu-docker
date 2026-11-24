@@ -74,6 +74,7 @@ if [ "${DOCKER:-0}" = "1" ]; then
         b) DOCKER_OPTS="CGROUP_DEVICE" ;;
         c) DOCKER_OPTS="PID_NS" ;;
         d) DOCKER_OPTS="SYSVIPC IPC_NS" ;;
+        e) DOCKER_OPTS="PID_NS CGROUP_DEVICE" ;;
         min|*) DOCKER_OPTS="SYSVIPC PID_NS IPC_NS CGROUP_DEVICE" ;;
     esac
     log "docker 变体（set=${DOCKER_SET:-min}）：开启 $DOCKER_OPTS"
