@@ -94,18 +94,20 @@ scripts/make-ak3-zip.sh kernel/msm-4.19/out/arch/arm64/boot/Image v1.0.0
 | `noksu` | `boot_Reno4_5G_Magisk_<ver>.img` | 纯内核，`CONFIG_KSU` 关闭 | 用 Magisk 拿 root |
 | `docker` | `boot_Reno4_5G_Magisk_Docker_<ver>.img` | 纯内核 + 容器所需选项 | Magisk + Docker 同时用 |
 
-`docker` 变体在 `stock_lito_defconfig` 基础上额外打开：
+`docker` 变体在 `stock_lito_defconfig` 基础上只额外打开这四项：
 
 ```
-CONFIG_PID_NS / CONFIG_IPC_NS / CONFIG_USER_NS
-CONFIG_CGROUP_DEVICE / CONFIG_CGROUP_PIDS
-CONFIG_BRIDGE_NETFILTER / CONFIG_NETFILTER_XT_MATCH_ADDRTYPE
-CONFIG_VXLAN / CONFIG_MACVLAN / CONFIG_IPVLAN / CONFIG_BRIDGE_VLAN_FILTERING
-CONFIG_DM_THIN_PROVISIONING
+CONFIG_SYSVIPC / CONFIG_PID_NS / CONFIG_IPC_NS / CONFIG_CGROUP_DEVICE
 ```
 
 （`NAMESPACES`、`CGROUPS`、`MEMCG`、`OVERLAY_FS`、`VETH`、`BRIDGE`、`NETFILTER`、
-`IP_NF_NAT`、`IP_NF_TARGET_MASQUERADE`、`SECCOMP` 原厂 defconfig 里已经是 y。）
+`IP_NF_NAT`、`IP_NF_TARGET_MASQUERADE`、`SECCOMP` 原厂 defconfig 里已经是 y，
+overlay2 / bridge / veth / NAT 直接可用。）
+
+**故意不开启**：`USER_NS`、`BRIDGE_NETFILTER`、`VXLAN`、`MACVLAN`、`IPVLAN`、
+`BRIDGE_VLAN_FILTERING`、`NETFILTER_XT_MATCH_ADDRTYPE`、`DM_THIN_PROVISIONING`。
+前几项会改变 Android netd / netfilter 的行为，实测在 GSI 上会导致**直接没网**，
+而它们对单机跑 Docker 不是必需；devicemapper 存储驱动用 overlay2 代替即可。
 
 ### 非 GKI 内核 + KernelSU 的已知限制
 
