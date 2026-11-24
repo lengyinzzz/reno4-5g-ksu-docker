@@ -109,6 +109,49 @@ overlay2 / bridge / veth / NAT 直接可用。）
 前几项会改变 Android netd / netfilter 的行为，实测在 GSI 上会导致**直接没网**，
 而它们对单机跑 Docker 不是必需；devicemapper 存储驱动用 overlay2 代替即可。
 
+### 容器相关开关的实测结论（OPPO Reno4 5G，GSI Android 13）
+
+在同一份 defconfig 上逐项打开、刷机实测（每个变体只多开一项）：
+
+| 开关 | 结果 | 说明 |
+|---|---|---|
+| `PID_NS` | ✅ 有网 | 唯一可以安全打开的 namespace 项 |
+| `SYSVIPC` | ❌ 断网 | `IPC_NS` 依赖它，所以 IPC 隔离也一起放弃 |
+| `CGROUP_DEVICE` | ❌ 断网 | A / B / E 三次验证，稳定复现 |
+| `ANDROID_PARANOID_NETWORK`（关闭） | ✅ 有网 | 不关的话 chroot 里的 root 建 socket 直接 `EACCES` |
+
+因此手机跑真 Docker 的现实能力：
+
+- 能：`docker pull`、`docker run --ipc=host --network=host`、overlayfs/vfs 存储
+- 不能：默认 private IPC namespace、`-p` 端口映射（缺 iptables 组合与 devices cgroup）、
+  资源限制（缺 devices cgroup）、rootless（缺 `USER_NS`）
+
+推荐使用 `docker_f`（`PID_NS` + 关 `ANDROID_PARANOID_NETWORK`）。
+
+### 在手机上跑真 dockerd（chroot 方案）
+
+```bash
+# Termux
+pkg install -y proot
+su -c 'chmod -R a+rX /data/local/ubuntu'
+curl -LO https://mirrors.tuna.tsinghua.edu.cn/ubuntu-cdimage/ubuntu-base/releases/22.04/release/ubuntu-base-22.04.5-base-arm64.tar.gz
+su -c 'mkdir -p /data/local/ubuntu && cp /data/data/com.termux/files/home/ubuntu-base-22.04.5-base-arm64.tar.gz /data/local/ubuntu/ && cd /data/local/ubuntu && tar -xzf ubuntu-base-22.04.5-base-arm64.tar.gz && rm -f *.tar.gz'
+su -c 'R=/data/local/ubuntu; mount -t proc proc $R/proc; mount -t sysfs sys $R/sys; mount -o bind /dev $R/dev; mount -o bind /dev/pts $R/dev/pts'
+
+# 装 docker（proot 里走 Termux 网络，DNS 正常）
+proot --link2symlink -0 -r /data/local/ubuntu -b /dev -b /proc -b /sys -w /root \
+  /usr/bin/env -i HOME=/root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+  /bin/bash -c 'apt update && apt install -y docker.io iproute2 iptables ca-certificates curl'
+
+# 起 dockerd（必须是真 root 的 chroot，proot 里起不来）
+su -c 'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; chroot /data/local/ubuntu /bin/bash'
+dockerd --iptables=false --storage-driver=vfs --data-root=/var/lib/docker > /tmp/dockerd.log 2>&1 &
+docker run --rm --ipc=host --network=host hello-world
+```
+
+装包时如果遇到 `Temporary failure resolving`，是 Android 的 DNS 拦截；关掉
+`ANDROID_PARANOID_NETWORK` 的 `docker_f` 能一并解决（root 进程可以直接建 socket）。
+
 ### 非 GKI 内核 + KernelSU 的已知限制
 
 本内核是 **4.19 非 GKI**。官方 KernelSU Manager（1.x 之后）只支持 GKI，在非 GKI 内核上会
