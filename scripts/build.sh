@@ -69,6 +69,7 @@ fi
 if [ "${DOCKER:-0}" = "1" ]; then
     log "docker 变体：开启 PID_NS / IPC_NS / USER_NS / CGROUP_DEVICE 等"
     ( cd "$KERNEL_DIR" && scripts/config --file "$OUT_DIR/.config" \
+        --enable SYSVIPC \
         --enable NAMESPACES \
         --enable PID_NS \
         --enable IPC_NS \
@@ -83,7 +84,7 @@ if [ "${DOCKER:-0}" = "1" ]; then
         --enable BRIDGE_VLAN_FILTERING \
         --enable DM_THIN_PROVISIONING )
     "${MAKE_CMD[@]}" olddefconfig
-    for opt in PID_NS IPC_NS USER_NS CGROUP_DEVICE CGROUP_PIDS; do
+    for opt in SYSVIPC PID_NS IPC_NS USER_NS CGROUP_DEVICE CGROUP_PIDS; do
         if ! grep -q "^CONFIG_${opt}=y" "$OUT_DIR/.config"; then
             die "docker 变体：CONFIG_${opt} 未能开启"
         fi
