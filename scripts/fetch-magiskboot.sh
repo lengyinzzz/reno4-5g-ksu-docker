@@ -69,7 +69,11 @@ with urllib.request.urlopen(req, timeout=600) as r, open(dest, "wb") as f:
 print(f"[magiskboot] 已下载 {total} 字节", file=sys.stderr)
 PY
 
-ent="$(unzip -Z1 "$tmp/magisk.apk" | grep -Ei '(^|/)(libmagiskboot\.so|magiskboot)$' | head -n 1 || true)"
+ent="$(unzip -Z1 "$tmp/magisk.apk" | grep -E '^lib/x86_64/(libmagiskboot\.so|magiskboot)$' | head -n 1 || true)"
+if [ -z "$ent" ]; then
+    # 兜底：任何 x86_64 目录下的 magiskboot
+    ent="$(unzip -Z1 "$tmp/magisk.apk" | grep -E '(^|/)x86_64/.*(libmagiskboot\.so|magiskboot)$' | head -n 1 || true)"
+fi
 [ -n "$ent" ] || die "APK 里找不到 magiskboot（换 MAGISK_VERSION 或设置 MAGISKBOOT）"
 log "从 APK 提取 $ent"
 
