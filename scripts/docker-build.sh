@@ -49,8 +49,13 @@ case "$VARIANT" in
         export KCFLAGS="${KCFLAGS:--Wno-error=strict-prototypes} -DKSU_FORCE_PERMISSIVE"
         export OUT_DIR="${OUT_DIR:-$KERNEL_DIR/out-permissive}"
         ;;
+    noksu|magisk)
+        # 不带 KernelSU：编出来的 boot.img 给 Magisk 修补用
+        export KSU=0
+        export OUT_DIR="${OUT_DIR:-$KERNEL_DIR/out-noksu}"
+        ;;
     *)
-        die "VARIANT 只能是 enforcing 或 permissive（当前：$VARIANT）"
+        die "VARIANT 只能是 enforcing / permissive / noksu（当前：$VARIANT）"
         ;;
 esac
 
@@ -95,7 +100,11 @@ if [ -z "${STOCK:-}" ] || [ ! -f "$STOCK" ]; then
 fi
 
 MB="$(bash scripts/fetch-magiskboot.sh)"
-BOOTIMG="$OUT/boot_Reno4_5G_KSU_${VERSION}_${VARIANT}.img"
+if [ "$VARIANT" = "noksu" ]; then
+    BOOTIMG="$OUT/boot_Reno4_5G_Magisk_${VERSION}.img"
+else
+    BOOTIMG="$OUT/boot_Reno4_5G_KSU_${VERSION}_${VARIANT}.img"
+fi
 
 MAGISKBOOT="$MB" bash scripts/repack_bootimg.sh "$STOCK" "$IMAGE" "$BOOTIMG"
 
