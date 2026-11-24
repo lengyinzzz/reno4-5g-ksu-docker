@@ -65,29 +65,33 @@ if [ "${KSU:-1}" = "0" ]; then
     log "已确认 CONFIG_KSU 关闭"
 fi
 
-# docker 变体：只开跑 runc 必需、且不会动 Android 网络栈的选项
-# （USER_NS / BRIDGE_NETFILTER / VXLAN / MACVLAN / IPVLAN 都会影响 netd 与 netfilter，
-#   实测会让 GSI 上直接没网，所以不碰；overlay2、bridge、veth、nat 原厂已经是 y）
+# docker 变体：按 DOCKER_SET 决定要额外打开哪些项（用于二分定位哪个开关影响网络）
+#   min（默认）：SYSVIPC + PID_NS + IPC_NS + CGROUP_DEVICE
+#   a / b / c / d：单独验证 SYSVIPC / CGROUP_DEVICE / PID_NS / IPC_NS
 if [ "${DOCKER:-0}" = "1" ]; then
-    log "docker 变体：开启 SYSVIPC / PID_NS / IPC_NS / CGROUP_DEVICE"
-    ( cd "$KERNEL_DIR" && scripts/config --file "$OUT_DIR/.config" \
-        --enable SYSVIPC \
-        --enable PID_NS \
-        --enable IPC_NS \
-        --enable CGROUP_DEVICE )
+    case "${DOCKER_SET:-min}" in
+        a) DOCKER_OPTS="SYSVIPC" ;;
+        b) DOCKER_OPTS="CGROUP_DEVICE" ;;
+        c) DOCKER_OPTS="PID_NS" ;;
+        d) DOCKER_OPTS="SYSVIPC IPC_NS" ;;
+        min|*) DOCKER_OPTS="SYSVIPC PID_NS IPC_NS CGROUP_DEVICE" ;;
+    esac
+    log "docker 变体（set=${DOCKER_SET:-min}）：开启 $DOCKER_OPTS"
+    set -- 
+    for opt in $DOCKER_OPTS; do set -- "$@" "--enable" "$opt"; done
+    ( cd "$KERNEL_DIR" && scripts/config --file "$OUT_DIR/.config" "$@" )
     "${MAKE_CMD[@]}" olddefconfig
-    for opt in SYSVIPC PID_NS IPC_NS CGROUP_DEVICE; do
+    for opt in $DOCKER_OPTS; do
         if ! grep -q "^CONFIG_${opt}=y" "$OUT_DIR/.config"; then
             die "docker 变体：CONFIG_${opt} 未能开启"
         fi
     done
-    # 反向确认没把网络相关的开关带进来
     for opt in USER_NS BRIDGE_NETFILTER VXLAN MACVLAN IPVLAN; do
         if grep -q "^CONFIG_${opt}=y" "$OUT_DIR/.config"; then
             die "docker 变体：不应开启 CONFIG_${opt}"
         fi
     done
-    log "已确认容器所需配置已开启，且网络相关开关未被打开"
+    log "已确认：$DOCKER_OPTS 全部生效，且网络相关开关未被打开"
 fi
 
 log "编译（-j$JOBS，KCFLAGS=\"$KCFLAGS\"）"
