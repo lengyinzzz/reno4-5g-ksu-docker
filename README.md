@@ -83,6 +83,63 @@ scripts/make-ak3-zip.sh kernel/msm-4.19/out/arch/arm64/boot/Image v1.0.0
 
 构建环境、依赖包与常见问题见 [`docs/BUILD.md`](docs/BUILD.md)；刷入与回退见 [`docs/FLASH.md`](docs/FLASH.md)。
 
+## 构建变体（Actions 里选 variant）
+
+同一个内核源码，Actions 可以按需产出四种 `boot.img`：
+
+| variant | 产物文件名 | 内核内容 | 用途 |
+|---|---|---|---|
+| `enforcing` | `boot_Reno4_5G_KSU_<ver>_enforcing.img` | 4.19 + KernelSU，SELinux 严格 | 原厂 ColorOS 上首选 |
+| `permissive` | `boot_Reno4_5G_KSU_<ver>_permissive.img` | 同上，编入 `KSU_FORCE_PERMISSIVE` | 策略注入失败时备用 |
+| `noksu` | `boot_Reno4_5G_Magisk_<ver>.img` | 纯内核，`CONFIG_KSU` 关闭 | 用 Magisk 拿 root |
+| `docker` | `boot_Reno4_5G_Magisk_Docker_<ver>.img` | 纯内核 + 容器所需选项 | Magisk + Docker 同时用 |
+
+`docker` 变体在 `stock_lito_defconfig` 基础上额外打开：
+
+```
+CONFIG_PID_NS / CONFIG_IPC_NS / CONFIG_USER_NS
+CONFIG_CGROUP_DEVICE / CONFIG_CGROUP_PIDS
+CONFIG_BRIDGE_NETFILTER / CONFIG_NETFILTER_XT_MATCH_ADDRTYPE
+CONFIG_VXLAN / CONFIG_MACVLAN / CONFIG_IPVLAN / CONFIG_BRIDGE_VLAN_FILTERING
+CONFIG_DM_THIN_PROVISIONING
+```
+
+（`NAMESPACES`、`CGROUPS`、`MEMCG`、`OVERLAY_FS`、`VETH`、`BRIDGE`、`NETFILTER`、
+`IP_NF_NAT`、`IP_NF_TARGET_MASQUERADE`、`SECCOMP` 原厂 defconfig 里已经是 y。）
+
+### 非 GKI 内核 + KernelSU 的已知限制
+
+本内核是 **4.19 非 GKI**。官方 KernelSU Manager（1.x 之后）只支持 GKI，在非 GKI 内核上会
+显示「只支持 GKI」，需要作者配套的 `32584` 版 Manager 才能用。
+
+在 GSI（例如 TrebleDroid A13，指纹 `google/cheetah`）上，KSU 依赖的 init `second_stage`
+钩子不一定会触发，实测常表现为 Manager 读不到 KSU 版本。这种情况下直接用 `noksu` 或
+`docker` 变体 + Magisk 更省事。
+
+### 用 Magisk 修补（noksu / docker 变体）
+
+1. 下载对应 `boot_*.img` 到手机
+2. Magisk → 安装 → **选择并修补一个文件** → 选该 img
+3. 生成的 `magisk_patched-*.img` 用 `fastboot flash boot` 刷入
+4. 验证：`adb shell su -c id` → `uid=0(root)`
+
+### 手机上的 Docker
+
+`docker` 变体只解决内核侧：namespace、cgroup、overlayfs、bridge、nat 都已可用。
+userspace 侧还需要：
+
+- 先用 Magisk 拿到 root
+- 准备一份能跑的 dockerd / runc（chroot 或 Termux 方案）
+- Android 用 cgroup v1，需要手动挂载（`/sys/fs/cgroup/{memory,cpu,cpuset,...}`）
+- 建议 `dockerd --iptables=false` 或先确认 `iptables` 可用
+
+自查内核侧是否就绪：
+
+```bash
+adb shell ls /proc/self/ns/        # 应包含 cgroup ipc mnt net pid user uts
+adb shell "cat /proc/cgroups"      # 看 memory / devices / pids 是否 enabled
+```
+
 ## 云端编译：GitHub Actions / Docker（只出 boot.img）
 
 不想在本机装 4 GB 环境，就让 Actions 编。产物只有 `boot.img`，不打 AnyKernel3 zip。
