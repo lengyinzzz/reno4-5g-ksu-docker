@@ -75,12 +75,19 @@ if [ "${DOCKER:-0}" = "1" ]; then
         c) DOCKER_OPTS="PID_NS" ;;
         d) DOCKER_OPTS="SYSVIPC IPC_NS" ;;
         e) DOCKER_OPTS="PID_NS CGROUP_DEVICE" ;;
+        f) DOCKER_OPTS="PID_NS"; DOCKER_DISABLE="ANDROID_PARANOID_NETWORK" ;;
         min|*) DOCKER_OPTS="SYSVIPC PID_NS IPC_NS CGROUP_DEVICE" ;;
     esac
     log "docker 变体（set=${DOCKER_SET:-min}）：开启 $DOCKER_OPTS"
     set -- 
     for opt in $DOCKER_OPTS; do set -- "$@" "--enable" "$opt"; done
     ( cd "$KERNEL_DIR" && scripts/config --file "$OUT_DIR/.config" "$@" )
+    if [ -n "${DOCKER_DISABLE:-}" ]; then
+        log "docker 变体：关闭 $DOCKER_DISABLE"
+        for opt in $DOCKER_DISABLE; do
+            ( cd "$KERNEL_DIR" && scripts/config --file "$OUT_DIR/.config" --disable "$opt" )
+        done
+    fi
     "${MAKE_CMD[@]}" olddefconfig
     for opt in $DOCKER_OPTS; do
         if ! grep -q "^CONFIG_${opt}=y" "$OUT_DIR/.config"; then
@@ -92,7 +99,12 @@ if [ "${DOCKER:-0}" = "1" ]; then
             die "docker 变体：不应开启 CONFIG_${opt}"
         fi
     done
-    log "已确认：$DOCKER_OPTS 全部生效，且网络相关开关未被打开"
+    for opt in ${DOCKER_DISABLE:-}; do
+        if grep -q "^CONFIG_${opt}=y" "$OUT_DIR/.config"; then
+            die "docker 变体：CONFIG_${opt} 未能关闭"
+        fi
+    done
+    log "已确认：$DOCKER_OPTS 全部生效，${DOCKER_DISABLE:-无额外关闭项} 已关闭，且网络相关开关未被打开"
 fi
 
 log "编译（-j$JOBS，KCFLAGS=\"$KCFLAGS\"）"
