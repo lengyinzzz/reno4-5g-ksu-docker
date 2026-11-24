@@ -54,6 +54,17 @@ MAKE_CMD=(make -C "$KERNEL_DIR" O="$OUT_DIR" CC=clang
 log "defconfig: $DEFCONFIG"
 "${MAKE_CMD[@]}" "$DEFCONFIG"
 
+# noksu 变体：defconfig 里 CONFIG_KSU=y，这里显式关掉（含依赖的子项由 olddefconfig 收拾）
+if [ "${KSU:-1}" = "0" ]; then
+    log "noksu：关闭 CONFIG_KSU"
+    ( cd "$KERNEL_DIR" && scripts/config --file "$OUT_DIR/.config" --disable KSU )
+    "${MAKE_CMD[@]}" olddefconfig
+    if grep -q '^CONFIG_KSU=y' "$OUT_DIR/.config"; then
+        die "CONFIG_KSU 仍然是 y，noksu 构建中止"
+    fi
+    log "已确认 CONFIG_KSU 关闭"
+fi
+
 log "编译（-j$JOBS，KCFLAGS=\"$KCFLAGS\"）"
 "${MAKE_CMD[@]}" -j"$JOBS"
 
