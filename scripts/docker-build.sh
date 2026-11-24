@@ -55,13 +55,21 @@ case "$VARIANT" in
         export OUT_DIR="${OUT_DIR:-$KERNEL_DIR/out-noksu}"
         ;;
     docker)
-        # 不带 KernelSU + 开启容器所需内核选项（PID_NS/IPC_NS/USER_NS 等）
+        # 不带 KernelSU + 开启容器所需内核选项（最小集）
         export KSU=0
         export DOCKER=1
+        export DOCKER_SET=min
         export OUT_DIR="${OUT_DIR:-$KERNEL_DIR/out-docker}"
         ;;
+    docker_a|docker_b|docker_c|docker_d)
+        # 二分验证：单独开启某一项，用于定位哪个开关影响网络
+        export KSU=0
+        export DOCKER=1
+        export DOCKER_SET="${VARIANT#docker_}"
+        export OUT_DIR="${OUT_DIR:-$KERNEL_DIR/out-${VARIANT}}"
+        ;;
     *)
-        die "VARIANT 只能是 enforcing / permissive / noksu / docker（当前：$VARIANT）"
+        die "VARIANT 只能是 enforcing / permissive / noksu / docker / docker_a..d（当前：$VARIANT）"
         ;;
 esac
 
@@ -110,6 +118,14 @@ if [ "$VARIANT" = "noksu" ]; then
     BOOTIMG="$OUT/boot_Reno4_5G_Magisk_${VERSION}.img"
 elif [ "$VARIANT" = "docker" ]; then
     BOOTIMG="$OUT/boot_Reno4_5G_Magisk_Docker_${VERSION}.img"
+elif [ "$VARIANT" = "docker_a" ]; then
+    BOOTIMG="$OUT/boot_Reno4_5G_DockerA_onlySYSVIPC_${VERSION}.img"
+elif [ "$VARIANT" = "docker_b" ]; then
+    BOOTIMG="$OUT/boot_Reno4_5G_DockerB_onlyCGROUPDEV_${VERSION}.img"
+elif [ "$VARIANT" = "docker_c" ]; then
+    BOOTIMG="$OUT/boot_Reno4_5G_DockerC_onlyPIDNS_${VERSION}.img"
+elif [ "$VARIANT" = "docker_d" ]; then
+    BOOTIMG="$OUT/boot_Reno4_5G_DockerD_SYSVIPC_IPCNS_${VERSION}.img"
 else
     BOOTIMG="$OUT/boot_Reno4_5G_KSU_${VERSION}_${VARIANT}.img"
 fi
