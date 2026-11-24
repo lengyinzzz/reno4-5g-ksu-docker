@@ -31,6 +31,7 @@ on:
           - enforcing
           - permissive
           - noksu
+          - docker
           - all
         default: both
       upload_release:
@@ -80,7 +81,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: ${{ fromJSON(inputs.variant == 'all' && '["enforcing","permissive","noksu"]' || inputs.variant == 'enforcing' && '["enforcing"]' || inputs.variant == 'permissive' && '["permissive"]' || inputs.variant == 'noksu' && '["noksu"]' || '["enforcing","permissive"]') }}
+        variant: ${{ fromJSON(inputs.variant == 'enforcing' && '["enforcing"]' || inputs.variant == 'permissive' && '["permissive"]' || inputs.variant == 'noksu' && '["noksu"]' || inputs.variant == 'docker' && '["docker"]' || inputs.variant == 'all' && '["enforcing","permissive","noksu","docker"]' || '["enforcing","permissive"]') }}
 
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
@@ -165,7 +166,7 @@ jobs:
           {
             echo "## ${{ matrix.variant }} 变体"
             echo
-            echo "- 说明：${{ matrix.variant == 'permissive' && 'SELinux 宽容（KSU_FORCE_PERMISSIVE，强制 setenforce 0）' || matrix.variant == 'noksu' && '不带 KernelSU，给 Magisk 修补用' || 'SELinux 严格（KSU 策略注入成功则保持 Enforcing）' }}"
+            echo "- 说明：${{ matrix.variant == 'permissive' && 'SELinux 宽容（KSU_FORCE_PERMISSIVE，强制 setenforce 0）' || matrix.variant == 'noksu' && '不带 KernelSU，给 Magisk 修补用' || matrix.variant == 'docker' && '不带 KernelSU + 容器内核选项（PID_NS/IPC_NS/USER_NS）' || 'SELinux 严格（KSU 策略注入成功则保持 Enforcing）' }}"
             echo "- 版本：\`$VERSION\`"
             echo "- 提交：\`${GITHUB_SHA::7}\`"
             echo
