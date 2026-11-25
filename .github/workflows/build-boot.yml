@@ -38,6 +38,8 @@ on:
           - docker_d
           - docker_e
           - docker_f
+          - docker_g
+          - docker_h
           - all
         default: both
       upload_release:
@@ -87,7 +89,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: ${{ fromJSON(inputs.variant == 'enforcing' && '["enforcing"]' || inputs.variant == 'permissive' && '["permissive"]' || inputs.variant == 'noksu' && '["noksu"]' || inputs.variant == 'docker' && '["docker"]' || inputs.variant == 'docker_a' && '["docker_a"]' || inputs.variant == 'docker_b' && '["docker_b"]' || inputs.variant == 'docker_c' && '["docker_c"]' || inputs.variant == 'docker_d' && '["docker_d"]' || inputs.variant == 'docker_e' && '["docker_e"]' || inputs.variant == 'docker_f' && '["docker_f"]' || inputs.variant == 'all' && '["enforcing","permissive","noksu","docker"]' || '["enforcing","permissive"]') }}
+        variant: ${{ fromJSON(inputs.variant == 'enforcing' && '["enforcing"]' || inputs.variant == 'permissive' && '["permissive"]' || inputs.variant == 'noksu' && '["noksu"]' || inputs.variant == 'docker' && '["docker"]' || inputs.variant == 'docker_a' && '["docker_a"]' || inputs.variant == 'docker_b' && '["docker_b"]' || inputs.variant == 'docker_c' && '["docker_c"]' || inputs.variant == 'docker_d' && '["docker_d"]' || inputs.variant == 'docker_e' && '["docker_e"]' || inputs.variant == 'docker_f' && '["docker_f"]' || inputs.variant == 'docker_g' && '["docker_g"]' || inputs.variant == 'docker_h' && '["docker_h"]' || inputs.variant == 'all' && '["enforcing","permissive","noksu","docker"]' || '["enforcing","permissive"]') }}
 
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
